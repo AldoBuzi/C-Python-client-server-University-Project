@@ -11,6 +11,7 @@ from ConnectionB import ConnectionB
 from ServerProtocol import ServerProtocol
 from PipeManager import PipeManager
 import signal
+import time
 
 # END IMPORT AREA 
 
@@ -101,7 +102,7 @@ if __name__ == '__main__':
                     epilog='Text at the bottom of help')
     parser.add_argument('thread', nargs='?' , default=-1, type=int)
     parser.add_argument('-w','--writers_number', type=str, default="3")           # numero di writers da passare ad archivio
-    parser.add_argument('-r', '--readers_number',type=str, default="3")      # numero di readers da passare ad archivio
+    parser.add_argument('-r', '--readers_number', type=str, default="3")      # numero di readers da passare ad archivio
     parser.add_argument('-v', '--valgrind', nargs='?', type=int, const=1)  # flag valgrind se 1 allora uso valgrind
     args = parser.parse_args()
     if(args.thread <=0):
