@@ -41,19 +41,19 @@ Ho deciso di spezzare anche qua leggermente la logica del programma in tre file:
 Oltre a questi file faccio uso anche di xerorri.c, file usato durante il corso.
 La creazione dei vari thread scrittore-capo, scrittori-consumatori e lettore-capo, lettori-consumatori e fine del thread gestore dei segnali viene svolta da archivio.c . Ho deciso di mantenere la logica in archivio in quanto il programma mi sembra leggibile cosi com'è e inoltre non volevo rendere troppo frammentata la logica di archivio.
 Archivio è diviso in regioni, delimitate da commenti. Il main rappresenta una regione, nel main ho individuato 5 regioni:
-4. Hash table e strutture iniziali
-5.  Regione dichiarazione scrittore capo, scrittori consumatori e creazioni struct necessarie 
-6. Regione dichiarazione lettore capo, lettori consumatori e creazioni struct necessarie
-7.  Regione dichiarazione maschera segnali, creazione thread gestore dei segnali e struct necessaria
-8. Regione di avvio dei thread
-9. Regione di deallocazione della memoria 
+1. Hash table e strutture iniziali
+2.  Regione dichiarazione scrittore capo, scrittori consumatori e creazioni struct necessarie 
+3. Regione dichiarazione lettore capo, lettori consumatori e creazioni struct necessarie
+4.  Regione dichiarazione maschera segnali, creazione thread gestore dei segnali e struct necessaria
+5. Regione di avvio dei thread
+6. Regione di deallocazione della memoria 
 
 Abbiamo altre 4 regioni:
-10. Regione delle struct, in questa regione sono presenti le dichiarazioni delle struct che verranno usate, in archivio in questa regione sono presenti altre sotto divisioni per descrivere più precisamente a chi appartiene la struct. Il thread capo lettore e capo scrittore usano la stessa struct ( e lo stesso corpo del thread)
-11. Regione corpo del capo lettore e capo scrittore, come anticipato i due capi usano lo stesso corpo in quanto quello che devono svolgere è la medesima funzione
-12. Regione lettori consumatori, in questa regione è presente la funzione che i thread lettori consumatori eseguiranno
-13. Regione scrittori consumatori, in questa regione è presente la funzione che i thread scrittori consumatori eseguiranno    
-14.  Infine abbiamo la regione del thread gestore dei segnali, in questa regione oltre al corpo della funzione da eseguire è presente la struct usata da questo thread
+1. Regione delle struct, in questa regione sono presenti le dichiarazioni delle struct che verranno usate, in archivio in questa regione sono presenti altre sotto divisioni per descrivere più precisamente a chi appartiene la struct. Il thread capo lettore e capo scrittore usano la stessa struct ( e lo stesso corpo del thread)
+2. Regione corpo del capo lettore e capo scrittore, come anticipato i due capi usano lo stesso corpo in quanto quello che devono svolgere è la medesima funzione
+3. Regione lettori consumatori, in questa regione è presente la funzione che i thread lettori consumatori eseguiranno
+4. Regione scrittori consumatori, in questa regione è presente la funzione che i thread scrittori consumatori eseguiranno    
+5.  Infine abbiamo la regione del thread gestore dei segnali, in questa regione oltre al corpo della funzione da eseguire è presente la struct usata da questo thread
 
 Per quanto riguarda la comunicazione tra capi (singolo produttore) e gli n consumatori ho adottato una soluzione basata sui semafori, inoltre i thread consumatori hanno pure una pthread_lock_t per sincronizzarsi rispetto gli altri consumatori. Ho deciso di usare i semafori perché la condizione da controllare è un intero e quindi ho ritenuto non necessario usare le condition variable(oltre al fatto che non ho una lock per il capo in quanto ho un solo produttore). Questa struttura viene usata sia dai lettori capi e lettori consumatori ma anche dallo scrittore capo e gli scrittori consumatori per scrivere nel buffer.
 
