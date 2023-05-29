@@ -40,7 +40,7 @@ Ho deciso di spezzare anche qua leggermente la logica del programma in tre file:
 
 Oltre a questi file faccio uso anche di xerorri.c, file usato durante il corso.
 La creazione dei vari thread scrittore-capo, scrittori-consumatori e lettore-capo, lettori-consumatori e fine del thread gestore dei segnali viene svolta da archivio.c . Ho deciso di mantenere la logica in archivio in quanto il programma mi sembra leggibile cosi com'è e inoltre non volevo rendere troppo frammentata la logica di archivio.
-Archivio è diviso in regioni, delimitate da commenti. Il main rappresenta una regione, nel main ho individuato 5 regioni:
+Archivio è diviso in regioni, delimitate da commenti. Il main rappresenta una regione, nel main ho individuato 6 regioni:
 1. Hash table e strutture iniziali
 2.  Regione dichiarazione scrittore capo, scrittori consumatori e creazioni struct necessarie 
 3. Regione dichiarazione lettore capo, lettori consumatori e creazioni struct necessarie
@@ -48,7 +48,7 @@ Archivio è diviso in regioni, delimitate da commenti. Il main rappresenta una r
 5. Regione di avvio dei thread
 6. Regione di deallocazione della memoria 
 
-Abbiamo altre 4 regioni:
+Abbiamo altre 4 regioni "globali":
 1. Regione delle struct, in questa regione sono presenti le dichiarazioni delle struct che verranno usate, in archivio in questa regione sono presenti altre sotto divisioni per descrivere più precisamente a chi appartiene la struct. Il thread capo lettore e capo scrittore usano la stessa struct ( e lo stesso corpo del thread)
 2. Regione corpo del capo lettore e capo scrittore, come anticipato i due capi usano lo stesso corpo in quanto quello che devono svolgere è la medesima funzione
 3. Regione lettori consumatori, in questa regione è presente la funzione che i thread lettori consumatori eseguiranno
