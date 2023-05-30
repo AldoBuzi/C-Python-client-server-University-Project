@@ -83,7 +83,6 @@ void *writer_body(void *args){
         ssize_t errNo = read(fd,&length,sizeof(short));
         if(errNo <0) termina("Errore lettura");
         if(errNo == 0) { //pipe chiusa, invio terminazione ai consumatori
-            puts("Finito di leggere");
             *(obj -> termination_code) = -1;
             xsem_post(obj->empty_slots, here);
             break;
