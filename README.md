@@ -24,27 +24,27 @@ The result is a **producer-consumer / reader-writer pipeline** that safely proce
              │ TCP :55116   │ TCP :55116
              ▼              ▼
 ┌──────────────────────────────────────────────────────────────┐
-│                 Python Server (server.py)                     │
+│                 Python Server (server.py)                    │
 │                                                              │
-│  ┌─ ConnectionA ──► "capolet" FIFO ──┐                      │
+│  ┌─ ConnectionA ──► "capolet" FIFO ──┐                       │
 │  │                                   │                       │
 │  └─ ConnectionB ──► "caposc" FIFO  ──┤                       │
 │                                      │                       │
-│  Spawns ./archivio as subprocess      │                      │
-│  Manages shutdown via SIGTERM         │                       │
+│  Spawns ./archivio as subprocess     │                       │
+│  Manages shutdown via SIGTERM        │                       │
 └──────────────────────────────────────┼───────────────────────┘
                                        │
                      Named Pipes (FIFOs)
                                        │
                                        ▼
 ┌──────────────────────────────────────────────────────────────┐
-│               C Archive Process (archivio)                    │
+│               C Archive Process (archivio)                   │
 │                                                              │
-│  ┌─ Reader Master Thread ──┬─ Reader Consumer Threads ──►   │
-│  │  (reads "capolet")      │  (lookup in hash table,        │
+│  ┌─ Reader Master Thread ──┬─ Reader Consumer Threads ──►    │
+│  │  (reads "capolet")      │  (lookup in hash table,         │
 │  │                         │   write to lettori.log)         │
-│  └─ Writer Master Thread ──┼─ Writer Consumer Threads ──►   │
-│     (reads "caposc")       │  (insert into hash table,      │
+│  └─ Writer Master Thread ──┼─ Writer Consumer Threads ──►    │
+│     (reads "caposc")       │  (insert into hash table,       │
 │                            │   count occurrences)            │
 │                                                              │
 │  Bounded buffer (size 10) with semaphore-based               │
