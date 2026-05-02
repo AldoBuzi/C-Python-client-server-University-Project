@@ -1,77 +1,257 @@
-# Progetto finale laboratorio 2
+# C-Python Client-Server University Project
 
-Di seguito riporto alcune scelte implementative e alcuni dettagli.
-I file legati al server si trovano sotto la cartella server_files. Nel repo è già presente l'eseguibile server.py .  Se si desiderasse generare un nuovo eseguibile si deve:
-1. entrare nella cartella server_files,
-2. Nel caso venisse usato pyinstaller verranno generati un file server.proc e due cartelle build e dist. 
-3. Nella cartella dist è presente l'effettivo eseguibile, esso va spostato dove sono presenti anche i client e archivio
-4. Infine si può rinominare server in server.py come da richiesta, volendo è possibile eliminare le cartelle build, dist e il file server.proc dopo queste operazioni. Per eseguire il progetto si deve prima fare make per generare tutti i vari eseguibili e solo successivamente avviare ./server.py
+> **Final project for Laboratorio 2** — A multi-threaded, mixed-language client-server application that processes text streams through a producer-consumer pipeline backed by a concurrent hash table.
 
-Di seguito parlo più dettagliamente del progetto.
-# Server
+## Overview
 
-Ho diviso la logica del server in diversi file. Volevo implementare un server che "nascondesse" il modo effettivo con cui venivano svolte alcune operazioni, come per esempio la gestione di un client, la gestione della pipe ecc..
-Per questo ho creato 5 file:
-1. server.py , il file da cui parte l'esecuzione del server
-2. ServerProtocol.py , la classe padre che fornisce alcuni metodi alle sottoclassi e in generale si occupa di gestire i client, scrivere nel file di log
-3. ConnectionA.py e ConncetionB.py , questi due file estendono la classe ServerProtocol.py , sfruttano i metodi messi a disposizione dal padre e definiscono internamente il proprio metodo di gestione del client. Inoltre entrambi le classi prevedono un membro globale per tutti gli oggetti che verranno istanziati da queste due classi, rispettivamente gli oggetti ConnectionA useranno tutti la pipe capolet(condividendo lo stesso oggetto creato con PipeManager), mentre gli oggetti di tipo ConnectionB avranno la propria pipe caposc
-4. PipeManager.py , come citato nel punto precedente, questa classe essenzialmente implementa le operazioni sulla pipe, nulla di particolare in realtà, è più un "incapsulamento"
+This project demonstrates a **C + Python** client-server system where:
 
-Di seguito riporto il "flusso" del programma
-## Server.py
+- **Python server** listens for TCP connections, distributes incoming text to **two named pipes** based on connection type
+- **C archive process** reads from both pipes, parses words, and maintains a **hash table** that counts word occurrences
+- **C clients** read text files, connect via TCP, and stream words to the server
 
-![server image](images/server.jpeg)
+The result is a **producer-consumer / reader-writer pipeline** that safely processes concurrent text ingestion and lookup using threads, semaphores, mutexes, and POSIX named pipes (FIFOs).
 
+---
 
-## Connection Class e PipeManager
+## Architecture
 
-![image](images/connection_and_pipe.jpeg)
+```
+┌──────────────────────────────────────────────────────────────┐
+│  client1.c (single-message, type A)                          │
+│  client2.c (multi-message,  type B)                          │
+└────────────┬──────────────┬──────────────────────────────────┘
+             │ TCP :55116   │ TCP :55116
+             ▼              ▼
+┌──────────────────────────────────────────────────────────────┐
+│                 Python Server (server.py)                     │
+│                                                              │
+│  ┌─ ConnectionA ──► "capolet" FIFO ──┐                      │
+│  │                                   │                       │
+│  └─ ConnectionB ──► "caposc" FIFO  ──┤                       │
+│                                      │                       │
+│  Spawns ./archivio as subprocess      │                      │
+│  Manages shutdown via SIGTERM         │                       │
+└──────────────────────────────────────┼───────────────────────┘
+                                       │
+                     Named Pipes (FIFOs)
+                                       │
+                                       ▼
+┌──────────────────────────────────────────────────────────────┐
+│               C Archive Process (archivio)                    │
+│                                                              │
+│  ┌─ Reader Master Thread ──┬─ Reader Consumer Threads ──►   │
+│  │  (reads "capolet")      │  (lookup in hash table,        │
+│  │                         │   write to lettori.log)         │
+│  └─ Writer Master Thread ──┼─ Writer Consumer Threads ──►   │
+│     (reads "caposc")       │  (insert into hash table,      │
+│                            │   count occurrences)            │
+│                                                              │
+│  Bounded buffer (size 10) with semaphore-based               │
+│  producer-consumer synchronization                           │
+│                                                              │
+│  Readers-writers lock (readers-priority)                     │
+│  for concurrent hash table access                            │
+│                                                              │
+│  Signal handler thread: SIGINT → print distinct word count   │
+│                          SIGTERM → graceful shutdown         │
+└──────────────────────────────────────────────────────────────┘
+```
 
-Questi sono solo diagrammi semplificativi, non sono da prendere come rappresentazione esaustive ma solo come una rappresentazione ad alto livello. Manca per esempio nel diagramma del server la fase di chisura stessa del server. 
+---
 
+## Project Structure
 
+```
+.
+├── server.py                    PyInstaller-compiled executable (Python 3)
+├── server_files/
+│   ├── server.py                Server entry point
+│   ├── ServerProtocol.py        Abstract base class for connection handling
+│   ├── ConnectionA.py           Single-message connection handler (type A)
+│   ├── ConnectionB.py           Multi-message connection handler (type B)
+│   └── PipeManager.py           Named pipe (FIFO) wrapper
+├── archivio.c                   Main archive process — threading, IPC, signal handling
+├── hashTableManager.c           Hash table operations (add, count, create, destroy entries)
+├── hashTableManager.h           Header for hash table functions
+├── rw_lock.c                    Readers-writers lock (readers-priority)
+├── rw_lock.h                    Header for readers-writers lock
+├── xerrori.c                    Error-checking wrappers for system calls
+├── xerrori.h                    Header for error wrappers
+├── client1.c                    Single-message client (type A) — one connection per line
+├── client2.c                    Multi-message client (type B) — one persistent connection per file
+├── makefile                     Build rules (gcc, pthreads, librt)
+├── file1.txt / file2.txt / file3.txt  Sample input files (Italian dictionary words)
+├── images/
+│   ├── server.jpeg              High-level server flow diagram
+│   └── connection_and_pipe.jpeg Connection & pipe flow diagram
+└── .gitignore
+```
 
+---
 
-# Archivio
-Ho deciso di spezzare anche qua leggermente la logica del programma in tre file:
-1. Archivio.c , dove viene effettivamente svolto il lavoro
-2. HashTableManager.c , usata in archivio per implementare le funzioni di aggiungi e conta oltre alle funzioni crea_entry e distruggi_entry
-3. rwlock.c , usata per l'implementazione della comunicazione lettore-scrittore a favore dei lettori
+## How It Works
 
-Oltre a questi file faccio uso anche di xerorri.c, file usato durante il corso.
-La creazione dei vari thread scrittore-capo, scrittori-consumatori e lettore-capo, lettori-consumatori e fine del thread gestore dei segnali viene svolta da archivio.c . Ho deciso di mantenere la logica in archivio in quanto il programma mi sembra leggibile cosi com'è e inoltre non volevo rendere troppo frammentata la logica di archivio.
-Archivio è diviso in regioni, delimitate da commenti. Il main rappresenta una regione, nel main ho individuato 6 regioni:
-1. Hash table e strutture iniziali
-2.  Regione dichiarazione scrittore capo, scrittori consumatori e creazioni struct necessarie 
-3. Regione dichiarazione lettore capo, lettori consumatori e creazioni struct necessarie
-4.  Regione dichiarazione maschera segnali, creazione thread gestore dei segnali e struct necessaria
-5. Regione di avvio dei thread
-6. Regione di deallocazione della memoria 
+### 1. Server (`server.py`)
 
-Abbiamo altre 4 regioni "globali":
-1. Regione delle struct, in questa regione sono presenti le dichiarazioni delle struct che verranno usate, in archivio in questa regione sono presenti altre sotto divisioni per descrivere più precisamente a chi appartiene la struct. Il thread capo lettore e capo scrittore usano la stessa struct ( e lo stesso corpo del thread)
-2. Regione corpo del capo lettore e capo scrittore, come anticipato i due capi usano lo stesso corpo in quanto quello che devono svolgere è la medesima funzione
-3. Regione lettori consumatori, in questa regione è presente la funzione che i thread lettori consumatori eseguiranno
-4. Regione scrittori consumatori, in questa regione è presente la funzione che i thread scrittori consumatori eseguiranno    
-5.  Infine abbiamo la regione del thread gestore dei segnali, in questa regione oltre al corpo della funzione da eseguire è presente la struct usata da questo thread
+The Python server:
+- Listens on **`127.0.0.1:55116`** with a **ThreadPoolExecutor**
+- On connection, reads **1 byte** to determine the connection type:
+  - `'a'` → **ConnectionA**: one string, close — writes to `"capolet"` FIFO
+  - `'b'` → **ConnectionB**: multiple strings until a zero-length marker — writes to `"caposc"` FIFO
+- Spawns the `archivio` C process as a subprocess
+- On `KeyboardInterrupt` (Ctrl+C): closes the FIFOs, sends **SIGTERM** to the archive process, waits for it, cleans up
 
-Per quanto riguarda la comunicazione tra capi (singolo produttore) e gli n consumatori ho adottato una soluzione basata sui semafori, inoltre i thread consumatori hanno pure una pthread_lock_t per sincronizzarsi rispetto gli altri consumatori. Ho deciso di usare i semafori perché la condizione da controllare è un intero e quindi ho ritenuto non necessario usare le condition variable(oltre al fatto che non ho una lock per il capo in quanto ho un solo produttore). Questa struttura viene usata sia dai lettori capi e lettori consumatori ma anche dallo scrittore capo e gli scrittori consumatori per scrivere nel buffer.
+### 2. Clients
 
-Per quanto riguarda la gestione degli accessi in hashtable ho usato lo schema scrittore-lettore a favore dei lettori come visto a lezione. Nello specifico si usa un int per il numero di lettori, un bool per indicare se si sta scrivendo e infine una variabile di condizione e un mutex per controllare i vari accessi.
+Both clients connect to `127.0.0.1:55116`.
 
-Riguardo la terminazione di archivio, esso termina come descritto all'arrivo del segnale SIGTERM da parte del server. La chiusurà delle pipe da parte del server e le join effettuate dal thread gestore dei segnali permettono di terminare con sicurezza.
-Infatti i thread capi appena verranno chiuse le pipe interromperanno la loro esecuzione e prima di terminare segnalano la terminazione con il valore "termination_code" passato ai consumatori e grazie alla post nel semaforo sveglieranno un consumatore. Il consumatore che era in attesa sul semaforo a questo punto si sveglierà e la prima cosa che fa è controllare il valore di terminazione, se esso vale -1 allora deve terminare, prima di terminare sveglierà un altro consumatore in attesa che a sua volta svolgerà la stessa procedura.
-Se ci fosse un cosumatore nella fase inerente alla scrittura o lettura dalla hash table allora semplicemente terminerà le sue operazioni sulla hash table e successivamente tornando al semaforo iniziale si accorgerà di dover terminare. Ho adottato questa soluzione in quanto non mi sembrava una idea ottimale interrompere i consumatori durante le loro operazioni nella hash table, oltre al fatto che è necessaria una maggiore complessità per implementare questa gestione.
+| Client | Connection Type | Behavior |
+|--------|---------------|----------|
+| `client1.c` | A (single-message) | Opens a file, reads lines via `getline`, opens a fresh TCP connection for **each line**, sends connection type + length + string, closes |
+| `client2.c` | B (multi-message) | Takes multiple files via argv, creates one thread per file, opens **one** TCP connection per thread, sends all lines consecutively, signals end with a length of **0**, then closes |
 
-Vorrei porre una maggiore attenzione al valore di terminazione, esso non viene passato nel buffer, rappresentà una variabile dedicata. Non scrivo nel buffer perché, come da indicazioni dal testo, esso è un buffer di puntatori a char. Quindi non ho ritenuto una buona soluzione scrivere un carattere da usare come valore di terminazione perché potenzialmente ogni carattere potrebbe essere inviato nel buffer e/o potrebbe cambiare il pattern usato con strtok.
+Both send:
+- **1 byte**: connection type (`'a'` or `'b'`)
+- **2 bytes**: string length as a `short` in **network byte order** (htons)
+- **N bytes**: the string itself (null-terminated)
 
-La parte di deallocazione della memoria avviene nel main, una volta terminato il thread gestore dei segnali si riprende l'esecuzione nel main e per questo motivo ho deciso di mantenere la deallocazione nel main in modo da non dover passare troppi oggetti ad evenutali funzioni ausiliari, questo anche perché ho evitato esplicitamente di usare variabili globali in modo evitare modifiche involontarie a quest'ultime.
+> **Why `short`?** Strings are capped at 2048 characters, so 2 bytes (16 bits) is more than enough.
 
-Anche per questo motivo anche di usare strotok_r in modo da evitare possibili sovrascritture della variabile globale usata da strtok standard, evitando cosi coomportamenti non previsiti.
+### 3. Archive Process (`archivio.c`)
 
- # Client
- Ho scritto i due client in c, entrambi i client leggono le proprie stringhe dai file tramite getline, ho implementato poi come da richiesta del testo le funzioni che svolgono i due client.
- Per iniviare la lunghezza della stringa ho usato uno short in quanto le stringhe hanno dimensione massima di 2048 caratteri quindi bastano log_2(2048) bit, ovvero 2 byte.
+This is the core processing engine, written in C.
 
+#### Threading Model
 
+| Thread Type | Count | Role |
+|------------|-------|------|
+| Writer Master | 1 | Reads `"caposc"` FIFO, parses tokens, pushes into bounded buffer |
+| Reader Master | 1 | Reads `"capolet"` FIFO, parses tokens, pushes into bounded buffer |
+| Writer Consumers | N (configurable, default 3) | Pop from buffer, insert into hash table (count occurrences) |
+| Reader Consumers | N (configurable, default 3) | Pop from buffer, look up in hash table, log to `lettori.log` |
+| Signal Handler | 1 | Waits for SIGTERM / SIGINT via `sigwait`, orchestrates graceful shutdown |
 
+#### Producer-Consumer Buffer
+
+A **bounded buffer** of size 10 connects each master thread to its consumers. Synchronization uses:
+- **POSIX unnamed semaphores** (`full_slots`, `empty_slots`) for availability signaling
+- **`pthread_mutex_t`** for mutual exclusion when consumers pop from the buffer
+
+#### Hash Table Access (Readers-Writers Lock)
+
+Hash table operations are protected by a **readers-priority readers-writers lock** (`rw_lock.c`):
+
+- Multiple readers can access simultaneously
+- A writer needs exclusive access (waits until all readers finish)
+- New readers can still enter while a writer is waiting (readers-priority)
+
+#### Signal Handling
+
+- **SIGINT** (from `pkill -SIGINT`): prints number of **distinct strings** added to the hash table to stderr
+- **SIGTERM** (from the Python server on shutdown):
+  1. Joins the master threads (they exit when the FIFO is closed)
+  2. Master threads set `termination_code = -1` and post the semaphore
+  3. Each consumer wakes, checks the code, posts the next consumer, and exits
+  4. Signal handler joins all consumer threads
+  5. Prints distinct count to stdout
+  6. Returns to `main()` for memory cleanup
+
+> The termination code is a **dedicated variable**, not written to the buffer. This avoids issues with the `char *` buffer type and potential conflicts with token separators in `strtok`.
+
+### 4. Hash Table Manager (`hashTableManager.c`)
+
+Wraps POSIX `hsearch` / `hcreate` with:
+- `aggiungi(s)`: insert or increment word count
+- `conta(s)`: look up word count
+- `crea_entry(s, n)` / `distruggi_entry(e)`: entry lifecycle helpers
+
+When a new string is inserted, the first byte of the source string is set to `'\0'` as a sentinel so the writer consumer can increment the distinct-count counter.
+
+---
+
+## Building & Running
+
+### Prerequisites
+
+- **GCC** with C11 support
+- **Python 3** (for the server — the repo includes a pre-built executable, but you can rebuild from sources)
+- POSIX-compatible system (Linux, macOS with some adaptation)
+
+### Build
+
+```bash
+make
+```
+
+This compiles `archivio`, `client1`, and `client2`.
+
+### Run
+
+Start the server with a thread pool, optional reader/writer counts, and optional valgrind:
+
+```bash
+./server.py 5 -r 2 -w 4
+```
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `thread` (positional) | Number of threads in the server's ThreadPoolExecutor | — |
+| `-r / --readers_number` | Number of reader consumer threads | `3` |
+| `-w / --writers_number` | Number of writer consumer threads | `3` |
+| `-v / --valgrind` | Run `archivio` under valgrind for leak checking | off |
+
+Then run clients in another terminal:
+
+```bash
+# Multi-message client (type B): multiple files, one connection per file
+./client2 file1.txt file2.txt
+
+# Single-message client (type A): one connection per line
+./client1 file3.txt
+```
+
+Or use the Makefile shortcut:
+
+```bash
+make run_server
+# python3 server.py 5 -r 2 -w 4 &
+# sleep 2
+# ./client2 file1.txt file2.txt
+# sleep 1
+# ./client1 file3.txt
+# pkill -SIGINT -f python3
+```
+
+### Output Files
+
+| File | Description |
+|------|-------------|
+| `lettori.log` | Reader consumers write `"<word> <count>"` for each word looked up |
+| `server.log` | Server connection log (bytes written per connection) |
+| `capolet` / `caposc` | Named pipes (created at runtime, cleaned up on exit) |
+
+---
+
+## Key Design Decisions
+
+- **Semaphores over condition variables** for the bounded buffer: the condition to check is a simple integer, and the single-producer design doesn't need a mutex for the producer side
+- **`strtok_r` over `strtok`**: avoids the global state issue of the standard `strtok`, making the code thread-safe by default
+- **Termination code outside the buffer**: prevents conflicts between a sentinel value and actual string tokens (which could be any `char *`)
+- **Readers-priority lock**: minimizes blocking for the more frequent read operations (log queries)
+- **Client type A uses one connection per line**: while less efficient, it's simpler and avoids keeping state between messages
+- **Client type B uses threads per file**: allows concurrent processing of multiple files while keeping one persistent connection per file
+
+---
+
+## Cleanup
+
+```bash
+make clean
+```
+
+---
+
+## License
+
+University project — for educational purposes.
